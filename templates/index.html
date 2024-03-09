@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+
+        td {
+            border: solid black 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <form id="exportForm" action="/export_excel/" method="post">
+        {% csrf_token %}
+        <input type="hidden" id="exportData" name="exportData">
+    </form>
+    <div class="d-grid gap-1 d-md-flex justify-content-md-start mt-3 mb-2">
+        <button class="btn btn-primary me-md-2" onclick="startFunction()">START</button>
+        <button class="btn btn-success me-md-2" onclick="printFunction()">PRINT</button>
+        <button class="btn btn-warning me-md-2" onclick="addFunction()">ADD</button>
+        <button class="btn btn-danger me-md-2" onclick="deleteFunction()">DELETE</button>
+        <button class="btn btn-info me-md-2" onclick="exportexcel()">EXPORT</button>
+    </div>
+
+    <label for="printValue">PRINT:</label>
+    <input type="text" id="printValue" placeholder="Enter PRINT value">
+
+    <label for="noOfTasking">NO OF TASKING:</label>
+    <input type="number" id="noOfTasking" placeholder="Enter number of copies">
+
+    <div id="tables"></div>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script>
+
+        function printFunction() {
+            // Read values from input elements
+            var printValue = document.getElementById('printValue').value.trim();
+            var noOfTaskingValue = document.getElementById('noOfTasking').value.trim();
+            var noOfTasking = parseInt(noOfTaskingValue);
+
+            // Validate input values
+            if (!printValue || isNaN(noOfTasking) || noOfTasking <= 0) {
+                alert("Please enter valid values for PRINT and NO OF TASKING.");
+                return;
+            }
+
+            // Create replicas based on the input values
+            for (var i = 1; i <= noOfTasking; i++) {
+                var newTaskValue = i;
+                createTable(printValue, noOfTasking, newTaskValue);
+            }
+        }
+
+        function deleteFunction() {
+            // Read values from input elements
+            var printValue = document.getElementById('printValue').value.trim();
+            var newTaskToDelete = parseInt(document.getElementById('noOfTasking').value.trim());
+
+            // Validate input values
+            if (!printValue || isNaN(newTaskToDelete) || newTaskToDelete <= 0) {
+                alert("Please enter valid values for PRINT and NEW_TASK.");
+                return;
+            }
+
+            // Check if a table with the specified PRINT value and NEW_TASK exists
+            var tableToDelete = allTables[printValue + "_" + newTaskToDelete];
+            if (tableToDelete) {
+                // Remove the table from the DOM
+                tableToDelete.parentNode.removeChild(tableToDelete);
+
+                // Remove the table reference from the allTables object
+                delete allTables[printValue + "_" + newTaskToDelete];
+
+                // Update the NEW_TASK value in the allTables object
+                var existingKeys = Object.keys(allTables).filter(key => key.startsWith(printValue + "_"));
+                existingKeys.forEach((key, index) => {
+                    var tableToUpdate = allTables[key];
+                    var taskValue = parseInt(key.split("_")[1]);
+                    var newTaskValue = index + 1;
+
+                    // Update the NEW_TASK value in the table
+                    tableToUpdate.rows[1].cells[1].textContent = newTaskValue;
+
+                    // Update the NO_OF_TASKING value in the table
+                    var noOfTaskingCell = tableToUpdate.rows[0].cells[3];
+                    var currentNoOfTasking = parseInt(noOfTaskingCell.textContent);
+                    noOfTaskingCell.textContent = currentNoOfTasking - 1;
+
+                    // Update the key in the allTables object
+                    delete allTables[key];
+                    allTables[printValue + "_" + newTaskValue] = tableToUpdate;
+                });
+
+                alert("Table deleted successfully!");
+            } else {
+                alert("Table not found. Please check your PRINT and NEW_TASK values.");
+            }
+        }
+
+        function addFunction() {
+            var printValue = document.getElementById('printValue').value.trim();
+            var noOfTaskingValue = document.getElementById('noOfTasking').value.trim();
+            var noOfTasking = parseInt(noOfTaskingValue);
+
+            // Validate input values
+            if (!printValue || isNaN(noOfTasking) || noOfTasking <= 0) {
+                alert("Please enter valid values for PRINT and NO OF TASKING.");
+                return;
+            }
+
+            // Check if a table with the specified PRINT value already exists
+            var existingTable = allTables[printValue + "_1"]; // Assuming NEW_TASK starts from 1
+            if (existingTable) {
+                // Find the highest NEW_TASK value in the existing table
+                var existingKeys = Object.keys(allTables).filter(key => key.startsWith(printValue + "_"));
+                var maxTaskValue = 0;
+                existingKeys.forEach(key => {
+                    var taskValue = parseInt(key.split("_")[1]);
+                    if (taskValue > maxTaskValue) {
+                        maxTaskValue = taskValue;
+                    }
+                });
+
+                // Create replicas based on the input values
+                for (var i = 1; i <= noOfTasking; i++) {
+                    var newTaskValue = maxTaskValue + i;
+
+                    // Update NO_OF_TASKING value for each replica
+                    var noOfTaskingForReplica = noOfTasking + maxTaskValue;
+
+                    createTable(printValue, noOfTaskingForReplica, newTaskValue, existingTable);
+                }
+
+                // Update NO_OF_TASKING value for all replicas with the same PRINT
+                existingKeys.forEach(key => {
+                    var tableToUpdate = allTables[key];
+                    var noOfTaskingCell = tableToUpdate.rows[0].cells[3];
+                    var currentNoOfTasking = parseInt(noOfTaskingCell.textContent);
+                    noOfTaskingCell.textContent = currentNoOfTasking + noOfTasking;
+                });
+
+            } else {
+                // If no table exists, create a new one
+                for (var i = 1; i <= noOfTasking; i++) {
+                    var newTaskValue = i;
+
+                    // Update NO_OF_TASKING value for each replica
+                    var noOfTaskingForReplica = noOfTasking + maxTaskValue;
+
+                    createTable(printValue, noOfTaskingForReplica, newTaskValue);
+                }
+            }
+        }
+
+
+        const allTables = {}
+        function updateTdContent(count) {
+            var wacTypeSelect = document.getElementById('wac_type' + count);
+            var selectedValue = wacTypeSelect.value;
+            console.log(wacTypeSelect, tdToUpdate, firstTdToUpdate, secondTdToUpdate);
+            var tdToUpdate = document.getElementById('title' + count);
+            // Update the content based on the selected value
+            if (selectedValue === 'Place') {
+                tdToUpdate.innerHTML = 'CWI';
+            } else if (selectedValue === 'Splice') {
+                tdToUpdate.innerHTML = 'SPLICE DETAILS';
+            } else {
+                tdToUpdate.innerHTML = 'CWI';
+            }
+
+            // Update the first TD based on the selected value
+            var firstTdToUpdate = document.getElementById('column1_' + count);
+            if (selectedValue === 'Place') {
+                firstTdToUpdate.innerHTML = 'QTY';
+            } else if (selectedValue === 'Splice') {
+                firstTdToUpdate.innerHTML = 'SIZE';
+            } else {
+
+                firstTdToUpdate.innerHTML = 'QTY';
+            }
+
+            // Update the second TD based on the selected value'
+            var secondTdToUpdate = document.getElementById('column2_' + count);
+            if (selectedValue === 'Place') {
+                secondTdToUpdate.innerHTML = 'CLASS';
+            } else if (selectedValue === 'Splice') {
+                secondTdToUpdate.innerHTML = 'J/U';
+            } else {
+
+                secondTdToUpdate.innerHTML = 'CLASS';
+            }
+
+
+        }
+        document.count = 0;
+        function createTable(PRINT, NO_OF_TASKING, NEW_TASK, insertAfter) {
+            const tableData = [
+                ["PRINT ", PRINT, "NO OF TASKING", NO_OF_TASKING, "", "CWI"],
+                ["NEW TASK", NEW_TASK, "", "", ""],
+                ["", "", "", "", "", "QTY", "CLASS", "TYPE", "VALUE"],
+                ["FRC", '<select name="FRC" id="FRC"><option value="854C">845C</option><option value="85C">85C</option><option value="822C">822C</option><option value="8645C">8645C</option></select>', "", "", "", "", "", "", ""],
+                ["", "", "", "", "", "", "", "", ""],
+                ["WAC TYPE", '<select name="wac_type" onchange="updateTdContent(' + document.count + ')"><option value="Place">PLACE</option><option value="Splice">SPLICE</option> <option value="Place">OTHER</option><option value="Place">REMOVE</option><option value="Place">THROW</option><option value="Place">T&M</option></select>', "", "", "", "", "", "", ""],
+                ["", "", "", "", "", "", "", "", ""],
+                ["WAC", "MATERIAL", "ORDER QTY", "REC QTY", "", "", "", "", ""],
+                ["PLACAM", "", "201", "201", "", "", "", "", ""]
+            ];
+
+            let tables = document.getElementById('tables');
+            let table = document.createElement("table");
+            let select, title1, column1, column2;
+            tableData.forEach((rowData, rowIndex) => {
+                let row = document.createElement('tr');
+                rowData.forEach((cellData, colIndex) => {
+                    let cell = document.createElement('td');
+                    cell.innerHTML = cellData;
+                    if (cell.innerHTML.includes('wac_type')) {
+                        console.log(cell.children);
+                        cell.children[0].setAttribute('id', 'wac_type' + document.count);
+                    }
+                    if (cell.innerHTML == "CWI") {
+                        cell.setAttribute('id', 'title' + document.count);
+                        cell.setAttribute('style', 'text-align: center;');
+                        cell.setAttribute('rowspan', '2');
+                        cell.setAttribute('colspan', '4');
+                    }
+                    if (cell.innerHTML == "QTY")
+                        cell.setAttribute('id', 'column1_' + document.count);
+                    if (cell.innerHTML == "CLASS")
+                        cell.setAttribute('id', 'column2_' + document.count);
+                    row.appendChild(cell);
+
+                    // Add styling for specific cells or rows
+                    if (rowIndex === 0 || rowIndex === 2) {
+                        // Adjust height and width for header cells
+                        cell.style.height = "30px";
+                        cell.style.width = "100px";
+                    } else if (rowIndex === 8) {
+                        // Adjust height and width for the last data row
+                        cell.style.height = "40px";
+                        cell.style.width = "80px";
+                    } else if (rowIndex > 2 && rowIndex < 8 && cellData === "") {
+                        // Adjust height and width for blank rows between sets of data
+                        cell.style.height = "20px";
+                        cell.style.width = "100px";
+                    }
+
+                    // Make all cells editable except for specific cells with select options
+                    if (!cell.innerHTML.includes('<select')) {
+                        cell.setAttribute('contenteditable', 'true');
+                    }
+                });
+                table.appendChild(row);
+            });
+
+            document.count += 1;
+
+            // Add two empty white rows between sets of data
+            for (let i = 0; i < 2; i++) {
+                const whiteRow = document.createElement('tr');
+                const blankCell = document.createElement('td');
+                blankCell.colSpan = 9;
+                blankCell.style.height = "20px";
+                blankCell.style.backgroundColor = "white";
+                blankCell.style.border = "none"; // Set border to none
+                whiteRow.appendChild(blankCell);
+                table.appendChild(whiteRow);
+            }
+
+            // If insertAfter is provided, insert the new table after the last occurrence of the same 'PRINT'
+            if (insertAfter) {
+                const existingTables = document.querySelectorAll(`[data-print="${PRINT}"]`);
+                const lastExistingTable = existingTables[existingTables.length - 1];
+                tables.insertBefore(table, lastExistingTable.nextSibling);
+            } else {
+                tables.appendChild(table);
+            }
+
+            // Update the sequence in the allTables object
+            allTables['' + PRINT + "_" + NEW_TASK] = table;
+            table.setAttribute('data-print', PRINT);
+
+        }
+
+        function exportexcel() {
+            var tables = document.querySelectorAll('[data-print]');
+            var exportData = [];
+
+            tables.forEach(function (table) {
+                var tableData = {
+                    PRINT: table.getAttribute('data-print'),
+                    NEW_TASK: table.rows[1].cells[1].textContent,
+                    tableData: []
+                };
+
+                for (var i = 0; i < table.rows.length; i++) {
+                    var rowData = [];
+                    for (var j = 0; j < table.rows[i].cells.length; j++) {
+                        // Check if the cell contains a select element
+                        var selectElement = table.rows[i].cells[j].querySelector('select');
+                        if (selectElement) {
+                            rowData.push(selectElement.value);
+                        } else {
+                            rowData.push(table.rows[i].cells[j].innerHTML);
+                        }
+                    }
+                    tableData.tableData.push(rowData);
+                }
+
+                exportData.push(tableData);
+            });
+
+            var exportDataInput = document.getElementById('exportData');
+            exportDataInput.value = JSON.stringify({ tables: exportData });
+
+            var exportForm = document.getElementById('exportForm');
+            exportForm.submit();
+        }
+    </script>
+</body>
+
+</html>
